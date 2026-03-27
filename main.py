@@ -1,25 +1,50 @@
 from fastapi import FastAPI
+from pydantic import BaseModel
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
 app = FastAPI()
 
 model = RandomForestClassifier()
+trained = False
 
-X = np.random.rand(100,10)
-y = np.random.randint(0,2,100)
+class TrainData(BaseModel):
+    data: list
 
-model.fit(X,y)
+class PredictData(BaseModel):
+    data: list
 
 @app.get("/")
-def home():
-    return {"status": "ok"}
+def root():
+    return {"status":"ok"}
+
+@app.post("/train")
+def train(d: TrainData):
+    global model, trained
+
+    X = []
+    y = []
+
+    for item in d.data:
+        X.append(item["features"])
+        y.append(item["result"])
+
+    if len(X) < 10:
+        return {"error":"not enough data"}
+
+    model.fit(X, y)
+    trained = True
+
+    return {"trained":True,"samples":len(X)}
 
 @app.post("/predict")
-def predict(data: dict):
-    arr = np.array(data["data"][-10:])
-    score = model.predict_proba([arr])[0][1]
+def predict(d: PredictData):
 
-    return {
-        "confidence": float(score)
-    }
+    if not trained:
+        return {"confidence":0.5}
+
+    X = np.array([d.data])
+
+    prob = model.predict_proba(X)[0][1]
+
+    return {"confidence":float(prob)}
